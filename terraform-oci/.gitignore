@@ -1,0 +1,24 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+!terraform.tfvars.example
+
+# OCI credentials (NEVER commit these!)
+.oci/
+*.pem
+*_api_key*
+
+# SSH keys (NEVER commit these!)
+*.pub
+id_rsa*
+oci_ca3*
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

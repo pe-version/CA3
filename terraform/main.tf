@@ -13,110 +13,128 @@ provider "aws" {
 }
 
 # VPC
-resource "aws_vpc" "swarm_vpc" {
+resource "aws_vpc" "k3s_vpc" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
 
   tags = {
-    Name    = "swarm-vpc"
-    Project = "CA2-Swarm"
+    Name    = "${var.project_name}-vpc"
+    Project = var.project_name
   }
 }
 
 # Internet Gateway
-resource "aws_internet_gateway" "swarm_igw" {
-  vpc_id = aws_vpc.swarm_vpc.id
+resource "aws_internet_gateway" "k3s_igw" {
+  vpc_id = aws_vpc.k3s_vpc.id
 
   tags = {
-    Name    = "swarm-igw"
-    Project = "CA2-Swarm"
+    Name    = "${var.project_name}-igw"
+    Project = var.project_name
   }
 }
 
 # Public Subnet
-resource "aws_subnet" "swarm_public_subnet" {
-  vpc_id                  = aws_vpc.swarm_vpc.id
+resource "aws_subnet" "k3s_public_subnet" {
+  vpc_id                  = aws_vpc.k3s_vpc.id
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "${var.aws_region}a"
   map_public_ip_on_launch = true
 
   tags = {
-    Name    = "swarm-public-subnet"
-    Project = "CA2-Swarm"
+    Name    = "${var.project_name}-public-subnet"
+    Project = var.project_name
   }
 }
 
 # Route Table
-resource "aws_route_table" "swarm_public_rt" {
-  vpc_id = aws_vpc.swarm_vpc.id
+resource "aws_route_table" "k3s_public_rt" {
+  vpc_id = aws_vpc.k3s_vpc.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.swarm_igw.id
+    gateway_id = aws_internet_gateway.k3s_igw.id
   }
 
   tags = {
-    Name    = "swarm-public-rt"
-    Project = "CA2-Swarm"
+    Name    = "${var.project_name}-public-rt"
+    Project = var.project_name
   }
 }
 
 # Route Table Association
-resource "aws_route_table_association" "swarm_public_rta" {
-  subnet_id      = aws_subnet.swarm_public_subnet.id
-  route_table_id = aws_route_table.swarm_public_rt.id
+resource "aws_route_table_association" "k3s_public_rta" {
+  subnet_id      = aws_subnet.k3s_public_subnet.id
+  route_table_id = aws_route_table.k3s_public_rt.id
 }
 
 # Security Group
-resource "aws_security_group" "swarm_sg" {
-  name        = "swarm-sg"
-  description = "Security group for Docker Swarm cluster"
-  vpc_id      = aws_vpc.swarm_vpc.id
+resource "aws_security_group" "k3s_sg" {
+  name        = "${var.project_name}-sg"
+  description = "Security group for K3s cluster"
+  vpc_id      = aws_vpc.k3s_vpc.id
 
-  # SSH
+  # SSH - Restrict to your IP
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
+    cidr_blocks = [var.my_ip]
+    description = "SSH access from your IP"
+  }
+
+  # K3s API Server
+  ingress {
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip, "10.0.0.0/16"]
+    description = "K3s API server"
+  }
+
+  # K3s internal - kubelet
+  ingress {
+    from_port   = 10250
+    to_port     = 10250
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+    description = "K3s kubelet API"
+  }
+
+  # K3s internal - flannel VXLAN
+  ingress {
+    from_port   = 8472
+    to_port     = 8472
+    protocol    = "udp"
+    cidr_blocks = ["10.0.0.0/16"]
+    description = "K3s flannel VXLAN"
+  }
+
+  # K3s internal - flannel Wireguard
+  ingress {
+    from_port   = 51820
+    to_port     = 51820
+    protocol    = "udp"
+    cidr_blocks = ["10.0.0.0/16"]
+    description = "K3s flannel Wireguard"
+  }
+
+  # Grafana Dashboard
+  ingress {
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "SSH access"
+    description = "Grafana web UI"
   }
 
-  # Docker Swarm - Cluster management
+  # Prometheus
   ingress {
-    from_port   = 2377
-    to_port     = 2377
+    from_port   = 9090
+    to_port     = 9090
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-    description = "Docker Swarm cluster management"
-  }
-
-  # Docker Swarm - Node communication (TCP)
-  ingress {
-    from_port   = 7946
-    to_port     = 7946
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-    description = "Docker Swarm node communication TCP"
-  }
-
-  # Docker Swarm - Node communication (UDP)
-  ingress {
-    from_port   = 7946
-    to_port     = 7946
-    protocol    = "udp"
-    cidr_blocks = ["10.0.0.0/16"]
-    description = "Docker Swarm node communication UDP"
-  }
-
-  # Docker Swarm - Overlay network
-  ingress {
-    from_port   = 4789
-    to_port     = 4789
-    protocol    = "udp"
-    cidr_blocks = ["10.0.0.0/16"]
-    description = "Docker Swarm overlay network"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Prometheus web UI"
   }
 
   # Producer Health Endpoint
@@ -137,22 +155,13 @@ resource "aws_security_group" "swarm_sg" {
     description = "Processor health endpoint"
   }
 
-  # Kafka (for debugging)
+  # Allow all internal traffic between nodes
   ingress {
-    from_port   = 9092
-    to_port     = 9092
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-    description = "Kafka internal"
-  }
-
-  # MongoDB (for debugging)
-  ingress {
-    from_port   = 27017
-    to_port     = 27017
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-    description = "MongoDB internal"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    self        = true
+    description = "Allow all traffic between cluster nodes"
   }
 
   # Egress - allow all
@@ -165,67 +174,88 @@ resource "aws_security_group" "swarm_sg" {
   }
 
   tags = {
-    Name    = "swarm-sg"
-    Project = "CA2-Swarm"
+    Name    = "${var.project_name}-sg"
+    Project = var.project_name
   }
 }
 
-# Manager Node
-resource "aws_instance" "swarm_manager" {
+# K3s Master Node
+resource "aws_instance" "k3s_master" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
   key_name               = var.ssh_key_name
-  subnet_id              = aws_subnet.swarm_public_subnet.id
-  vpc_security_group_ids = [aws_security_group.swarm_sg.id]
-  
+  subnet_id              = aws_subnet.k3s_public_subnet.id
+  vpc_security_group_ids = [aws_security_group.k3s_sg.id]
+
   root_block_device {
-    volume_size = 20
+    volume_size = var.ebs_volume_size
     volume_type = "gp3"
   }
 
+  user_data = templatefile("${path.module}/user-data-master.sh", {
+    node_name = "k3s-master"
+  })
+
   tags = {
-    Name    = "swarm-manager"
-    Role    = "manager"
-    Project = "CA2-Swarm"
+    Name    = "${var.project_name}-master"
+    Role    = "master"
+    Project = var.project_name
+    NodeType = "control-plane"
   }
 }
 
-# Worker Node 1
-resource "aws_instance" "swarm_worker_1" {
+# K3s Worker Node 1
+resource "aws_instance" "k3s_worker_1" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
   key_name               = var.ssh_key_name
-  subnet_id              = aws_subnet.swarm_public_subnet.id
-  vpc_security_group_ids = [aws_security_group.swarm_sg.id]
-  
+  subnet_id              = aws_subnet.k3s_public_subnet.id
+  vpc_security_group_ids = [aws_security_group.k3s_sg.id]
+
   root_block_device {
-    volume_size = 20
+    volume_size = var.ebs_volume_size
     volume_type = "gp3"
   }
 
+  user_data = templatefile("${path.module}/user-data-worker.sh", {
+    node_name = "k3s-worker-1"
+    master_ip = aws_instance.k3s_master.private_ip
+  })
+
   tags = {
-    Name    = "swarm-worker-1"
+    Name    = "${var.project_name}-worker-1"
     Role    = "worker"
-    Project = "CA2-Swarm"
+    Project = var.project_name
+    NodeType = "data-services"
   }
+
+  depends_on = [aws_instance.k3s_master]
 }
 
-# Worker Node 2
-resource "aws_instance" "swarm_worker_2" {
+# K3s Worker Node 2
+resource "aws_instance" "k3s_worker_2" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
   key_name               = var.ssh_key_name
-  subnet_id              = aws_subnet.swarm_public_subnet.id
-  vpc_security_group_ids = [aws_security_group.swarm_sg.id]
-  
+  subnet_id              = aws_subnet.k3s_public_subnet.id
+  vpc_security_group_ids = [aws_security_group.k3s_sg.id]
+
   root_block_device {
-    volume_size = 20
+    volume_size = var.ebs_volume_size
     volume_type = "gp3"
   }
 
+  user_data = templatefile("${path.module}/user-data-worker.sh", {
+    node_name = "k3s-worker-2"
+    master_ip = aws_instance.k3s_master.private_ip
+  })
+
   tags = {
-    Name    = "swarm-worker-2"
+    Name    = "${var.project_name}-worker-2"
     Role    = "worker"
-    Project = "CA2-Swarm"
+    Project = var.project_name
+    NodeType = "application-services"
   }
+
+  depends_on = [aws_instance.k3s_master]
 }

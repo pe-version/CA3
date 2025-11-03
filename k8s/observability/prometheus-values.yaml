@@ -1,0 +1,136 @@
+# Helm values for kube-prometheus-stack
+# Deploy with: helm install prometheus prometheus-community/kube-prometheus-stack -n ca3-app -f prometheus-values.yaml
+
+# Prometheus configuration
+prometheus:
+  prometheusSpec:
+    # Scrape all ServiceMonitors regardless of label
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+
+    # Resource limits
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+    # Retention
+    retention: 7d
+    retentionSize: 5GB
+
+    # Storage
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+  # Expose via NodePort
+  service:
+    type: NodePort
+    nodePort: 30090
+
+# Grafana configuration
+grafana:
+  enabled: true
+
+  # Admin credentials
+  adminPassword: admin
+
+  # Expose via NodePort
+  service:
+    type: NodePort
+    nodePort: 30300
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # Persistence
+  persistence:
+    enabled: true
+    size: 5Gi
+
+  # Pre-configured dashboards
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+  # Additional data sources
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki:3100
+      access: proxy
+      isDefault: false
+      jsonData:
+        maxLines: 1000
+
+# Alert Manager configuration
+alertmanager:
+  enabled: true
+
+  service:
+    type: ClusterIP
+
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+
+# Node exporter - monitor all nodes
+prometheus-node-exporter:
+  enabled: true
+  hostNetwork: true
+  hostPID: true
+
+# kube-state-metrics - monitor K8s objects
+kubeStateMetrics:
+  enabled: true
+
+# Disable components we don't need for this assignment
+kubeApiServer:
+  enabled: true
+kubelet:
+  enabled: true
+kubeControllerManager:
+  enabled: false
+coreDns:
+  enabled: true
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: true

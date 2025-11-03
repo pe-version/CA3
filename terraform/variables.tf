@@ -11,9 +11,15 @@ variable "ami_id" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type"
+  description = "EC2 instance type for all nodes"
   type        = string
-  default     = "t3.small"
+  default     = "t3.medium"  # CA3: 3-node cluster - addresses CA2 capacity issues
+}
+
+variable "node_count" {
+  description = "Number of K3s nodes (1 master + workers)"
+  type        = number
+  default     = 3
 }
 
 variable "ssh_key_name" {
@@ -22,8 +28,20 @@ variable "ssh_key_name" {
   # No default - must be provided
 }
 
+variable "my_ip" {
+  description = "Your IP address for SSH access (CIDR notation)"
+  type        = string
+  # Example: "1.2.3.4/32"
+}
+
 variable "project_name" {
   description = "Project name for tagging"
   type        = string
-  default     = "CA2-Swarm"
+  default     = "CA3-K3s-3Node"
+}
+
+variable "ebs_volume_size" {
+  description = "Root EBS volume size in GB per instance"
+  type        = number
+  default     = 20
 }

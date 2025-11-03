@@ -1,0 +1,299 @@
+# NetworkPolicies for CA3 Assignment
+# These policies implement defense-in-depth security by restricting pod-to-pod communication
+
+---
+# Default deny all ingress traffic in ca3-app namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ca3-app
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+---
+# Allow Prometheus to scrape metrics from all pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scraping
+  namespace: ca3-app
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ca3-app
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8000  # Producer metrics
+        - protocol: TCP
+          port: 8001  # Processor metrics
+
+---
+# Allow Promtail to collect logs from all pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-promtail
+  namespace: ca3-app
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: promtail
+
+---
+# ZooKeeper: Only allow Kafka to connect
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: zookeeper-policy
+  namespace: ca3-app
+spec:
+  podSelector:
+    matchLabels:
+      app: zookeeper
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow Kafka
+    - from:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - protocol: TCP
+          port: 2181
+    # Allow ZooKeeper cluster communication
+    - from:
+        - podSelector:
+            matchLabels:
+              app: zookeeper
+      ports:
+        - protocol: TCP
+          port: 2181
+        - protocol: TCP
+          port: 2888
+        - protocol: TCP
+          port: 3888
+
+---
+# Kafka: Allow Producer and Processor to connect
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kafka-policy
+  namespace: ca3-app
+spec:
+  podSelector:
+    matchLabels:
+      app: kafka
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow Producer
+    - from:
+        - podSelector:
+            matchLabels:
+              app: producer
+      ports:
+        - protocol: TCP
+          port: 9092
+    # Allow Processor
+    - from:
+        - podSelector:
+            matchLabels:
+              app: processor
+      ports:
+        - protocol: TCP
+          port: 9092
+  egress:
+    # Allow connection to ZooKeeper
+    - to:
+        - podSelector:
+            matchLabels:
+              app: zookeeper
+      ports:
+        - protocol: TCP
+          port: 2181
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+
+---
+# MongoDB: Only allow Processor to connect
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongodb-policy
+  namespace: ca3-app
+spec:
+  podSelector:
+    matchLabels:
+      app: mongodb
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow Processor
+    - from:
+        - podSelector:
+            matchLabels:
+              app: processor
+      ports:
+        - protocol: TCP
+          port: 27017
+
+---
+# Producer: Allow external access and connection to Kafka
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: producer-policy
+  namespace: ca3-app
+spec:
+  podSelector:
+    matchLabels:
+      app: producer
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow external access via NodePort
+    - ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # Allow connection to Kafka
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow external API calls (metals-api.com)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+
+---
+# Processor: Allow external access and connections to Kafka and MongoDB
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: processor-policy
+  namespace: ca3-app
+spec:
+  podSelector:
+    matchLabels:
+      app: processor
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow external access via NodePort
+    - ports:
+        - protocol: TCP
+          port: 8001
+  egress:
+    # Allow connection to Kafka
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
+    # Allow connection to MongoDB
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - protocol: TCP
+          port: 27017
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+
+---
+# Allow Grafana to access Prometheus and Loki
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana-policy
+  namespace: ca3-app
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow external access
+    - ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    # Allow connection to Prometheus
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 9090
+    # Allow connection to Loki
+    - to:
+        - podSelector:
+            matchLabels:
+              app: loki
+      ports:
+        - protocol: TCP
+          port: 3100
+    # Allow DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53

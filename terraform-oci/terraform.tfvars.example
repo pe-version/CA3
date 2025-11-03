@@ -1,0 +1,28 @@
+# Oracle Cloud Infrastructure Configuration for CA3
+# Copy this file to terraform.tfvars and fill in your values
+
+# Required: Get these from Oracle Cloud Console
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+user_ocid        = "ocid1.user.oc1..aaaaaaaYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+compartment_ocid = "ocid1.compartment.oc1..aaaaaaaZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"
+
+# Required: Availability Domain
+# Check which AD has ARM capacity:
+# OCI Console → Governance → Limits → VM.Standard.A1.Flex
+# Format for us-chicago-1:
+#   - YXRh:US-CHICAGO-1-AD-1
+#   - YXRh:US-CHICAGO-1-AD-2
+#   - YXRh:US-CHICAGO-1-AD-3
+# Format for us-ashburn-1:
+#   - iKTz:US-ASHBURN-AD-1
+availability_domain = "YXRh:US-CHICAGO-1-AD-1"
+
+# Required: SSH Public Key
+# Paste contents of: cat ~/.ssh/oci_ca3.pub
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ..."
+
+# Optional: Override defaults
+# region              = "us-chicago-1"  # Already set to us-chicago-1 in variables.tf
+# instance_ocpus      = 4
+# instance_memory_gb  = 12
+# boot_volume_size_gb = 50

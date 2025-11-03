@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ca3-app
+  labels:
+    name: ca3-app
+    project: CA3
+    assignment: cloud-native-ops

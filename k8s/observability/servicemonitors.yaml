@@ -1,0 +1,66 @@
+---
+# ServiceMonitor for Producer
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: producer-metrics
+  namespace: ca3-app
+  labels:
+    app: producer
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: producer
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - ca3-app
+
+---
+# ServiceMonitor for Processor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: processor-metrics
+  namespace: ca3-app
+  labels:
+    app: processor
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: processor
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - ca3-app
+
+---
+# ServiceMonitor for Kafka (if JMX exporter is configured)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kafka-metrics
+  namespace: ca3-app
+  labels:
+    app: kafka
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: kafka
+  endpoints:
+    - port: kafka
+      interval: 30s
+  namespaceSelector:
+    matchNames:
+      - ca3-app

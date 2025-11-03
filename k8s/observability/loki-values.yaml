@@ -1,0 +1,138 @@
+# Helm values for Loki stack
+# Deploy with: helm install loki grafana/loki-stack -n ca3-app -f loki-values.yaml
+
+# Loki configuration
+loki:
+  enabled: true
+
+  # Persistence
+  persistence:
+    enabled: true
+    size: 5Gi
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # Configuration
+  config:
+    auth_enabled: false
+
+    server:
+      http_listen_port: 3100
+
+    ingester:
+      chunk_idle_period: 5m
+      chunk_retain_period: 30s
+      max_chunk_age: 1h
+      lifecycler:
+        ring:
+          kvstore:
+            store: inmemory
+          replication_factor: 1
+
+    schema_config:
+      configs:
+        - from: 2020-10-24
+          store: boltdb-shipper
+          object_store: filesystem
+          schema: v11
+          index:
+            prefix: index_
+            period: 24h
+
+    storage_config:
+      boltdb_shipper:
+        active_index_directory: /loki/boltdb-shipper-active
+        cache_location: /loki/boltdb-shipper-cache
+        cache_ttl: 24h
+        shared_store: filesystem
+      filesystem:
+        directory: /loki/chunks
+
+    limits_config:
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      retention_period: 168h  # 7 days
+
+    chunk_store_config:
+      max_look_back_period: 168h
+
+    table_manager:
+      retention_deletes_enabled: true
+      retention_period: 168h
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 3100
+
+# Promtail configuration (log shipper)
+promtail:
+  enabled: true
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  # Configuration
+  config:
+    clients:
+      - url: http://{{ .Release.Name }}:3100/loki/api/v1/push
+
+    positions:
+      filename: /tmp/positions.yaml
+
+    scrape_configs:
+      # Scrape all pod logs
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          # Only scrape pods in ca3-app namespace
+          - source_labels: [__meta_kubernetes_namespace]
+            regex: ca3-app
+            action: keep
+
+          # Add pod name as label
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+
+          # Add namespace as label
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+          # Add container name as label
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container
+
+          # Add app label
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+
+          # Add tier label
+          - source_labels: [__meta_kubernetes_pod_label_tier]
+            target_label: tier
+
+# Disable Grafana (we're using the one from kube-prometheus-stack)
+grafana:
+  enabled: false
+
+# Disable fluent-bit (we're using promtail)
+fluent-bit:
+  enabled: false
+
+# Disable log gateway
+gateway:
+  enabled: false

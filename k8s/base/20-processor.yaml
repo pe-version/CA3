@@ -1,0 +1,201 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: processor
+  namespace: ca3-app
+  labels:
+    app: processor
+    tier: processing
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8001
+      targetPort: 8001
+  selector:
+    app: processor
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: processor-nodeport
+  namespace: ca3-app
+  labels:
+    app: processor
+    tier: processing
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: 8001
+      targetPort: 8001
+      nodePort: 30001
+  selector:
+    app: processor
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: processor
+  namespace: ca3-app
+  labels:
+    app: processor
+    tier: processing
+    scalable: "true"
+spec:
+  replicas: 1  # Will be managed by HPA
+  selector:
+    matchLabels:
+      app: processor
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: processor
+        tier: processing
+        scalable: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Prefer worker-2 (application-services node)
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: workload
+                    operator: In
+                    values:
+                      - application-services
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - processor
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: processor
+          image: hiphophippo/metals-processor:v1.0
+          ports:
+            - containerPort: 8001
+              name: http
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-0.kafka.ca3-app.svc.cluster.local:9092"
+            - name: KAFKA_TOPIC
+              value: "metals-prices"
+            - name: KAFKA_GROUP_ID
+              value: "metals-processor-group"
+            - name: MONGODB_HOST
+              value: "mongodb-0.mongodb.ca3-app.svc.cluster.local"
+            - name: MONGODB_PORT
+              value: "27017"
+            - name: MONGODB_DATABASE
+              value: "metals"
+            - name: MONGODB_USERNAME
+              value: "admin"
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-password
+                  key: password
+            - name: PROCESSOR_BATCH_SIZE
+              value: "50"
+            - name: PROCESSOR_COMMIT_INTERVAL
+              value: "5"
+            - name: LOG_LEVEL
+              value: "INFO"
+          resources:
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: processor-config
+              mountPath: /app/config.yml
+              subPath: config.yml
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: processor-config
+          configMap:
+            name: processor-config
+
+---
+# Horizontal Pod Autoscaler for Processor
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: processor-hpa
+  namespace: ca3-app
+  labels:
+    app: processor
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: processor
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 120
+      selectPolicy: Min

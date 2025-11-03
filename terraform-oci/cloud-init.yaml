@@ -1,0 +1,98 @@
+#cloud-config
+# Cloud-init script for CA3 K3s node on Oracle Cloud ARM
+
+hostname: ${hostname}
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - wget
+  - git
+  - jq
+  - htop
+  - net-tools
+  - software-properties-common
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+
+# Disable Ubuntu's automatic updates (we'll control updates manually)
+write_files:
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "0";
+      APT::Periodic::Unattended-Upgrade "0";
+
+  - path: /etc/sysctl.d/99-k3s.conf
+    content: |
+      # K3s kernel parameters
+      net.bridge.bridge-nf-call-iptables=1
+      net.ipv4.ip_forward=1
+      net.bridge.bridge-nf-call-ip6tables=1
+      fs.inotify.max_user_instances=8192
+      fs.inotify.max_user_watches=524288
+
+  - path: /etc/modules-load.d/k3s.conf
+    content: |
+      br_netfilter
+      overlay
+
+runcmd:
+  # Load kernel modules
+  - modprobe br_netfilter
+  - modprobe overlay
+  - sysctl --system
+
+  # Set timezone
+  - timedatectl set-timezone America/New_York
+
+  # Increase file descriptors
+  - echo "* soft nofile 65536" >> /etc/security/limits.conf
+  - echo "* hard nofile 65536" >> /etc/security/limits.conf
+
+  # Create directory for K3s installation
+  - mkdir -p /opt/ca3
+
+  # Download K3s install script (don't install yet - user will do this)
+  - curl -sfL https://get.k3s.io -o /opt/ca3/k3s-install.sh
+  - chmod +x /opt/ca3/k3s-install.sh
+
+  # Create welcome message
+  - |
+    cat > /etc/motd <<'EOF'
+    ╔════════════════════════════════════════════════════════════════╗
+    ║                   CA3 K3s Node - Oracle Cloud                  ║
+    ║                        Always Free Tier                        ║
+    ╠════════════════════════════════════════════════════════════════╣
+    ║  Instance: VM.Standard.A1.Flex (ARM64)                         ║
+    ║  vCPUs: 4 OCPUs                                                ║
+    ║  RAM: 12GB                                                     ║
+    ║  Cost: $0.00/month (FREE FOREVER)                              ║
+    ╠════════════════════════════════════════════════════════════════╣
+    ║  Next Steps:                                                   ║
+    ║                                                                ║
+    ║  1. Install K3s:                                               ║
+    ║     curl -sfL https://get.k3s.io | sh -                        ║
+    ║                                                                ║
+    ║  2. Verify:                                                    ║
+    ║     sudo kubectl get nodes                                     ║
+    ║                                                                ║
+    ║  3. Get kubeconfig:                                            ║
+    ║     sudo cat /etc/rancher/k3s/k3s.yaml                         ║
+    ║                                                                ║
+    ║  4. Deploy CA3 stack:                                          ║
+    ║     kubectl apply -k ~/CA2/k8s/                                ║
+    ╚════════════════════════════════════════════════════════════════╝
+    EOF
+
+final_message: |
+  CA3 K3s node provisioned successfully!
+  Instance is ready for K3s installation.
+
+  Cost: $0.00 (Oracle Cloud Always Free Tier)
+
+  To install K3s, run:
+    curl -sfL https://get.k3s.io | sh -

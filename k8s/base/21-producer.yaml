@@ -1,0 +1,189 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: producer
+  namespace: ca3-app
+  labels:
+    app: producer
+    tier: ingestion
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  selector:
+    app: producer
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: producer-nodeport
+  namespace: ca3-app
+  labels:
+    app: producer
+    tier: ingestion
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      nodePort: 30000
+  selector:
+    app: producer
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producer
+  namespace: ca3-app
+  labels:
+    app: producer
+    tier: ingestion
+    scalable: "true"
+spec:
+  replicas: 1  # Will be managed by HPA
+  selector:
+    matchLabels:
+      app: producer
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: producer
+        tier: ingestion
+        scalable: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Prefer worker-2 (application-services node)
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: workload
+                    operator: In
+                    values:
+                      - application-services
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - producer
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: producer
+          image: hiphophippo/metals-producer:v1.0
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-0.kafka.ca3-app.svc.cluster.local:9092"
+            - name: KAFKA_TOPIC
+              value: "metals-prices"
+            - name: PRODUCER_INTERVAL
+              value: "5"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-key
+                  key: key
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+          volumeMounts:
+            - name: producer-config
+              mountPath: /app/config.yml
+              subPath: config.yml
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: producer-config
+          configMap:
+            name: producer-config
+
+---
+# Horizontal Pod Autoscaler for Producer
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: producer-hpa
+  namespace: ca3-app
+  labels:
+    app: producer
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: producer
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 120
+      selectPolicy: Min

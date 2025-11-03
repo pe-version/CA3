@@ -1,11 +1,24 @@
 # Copy this file to terraform.tfvars and update with your values
+# cp terraform.tfvars.example terraform.tfvars
 
-aws_region     = "us-east-2"
-ssh_key_name   = "your-key-name"  # Name of your SSH key in AWS (without .pem)
-instance_type  = "t3.small"
-ami_id         = "ami-0ea3c35c5c3284d82"  # Ubuntu 22.04 LTS in us-east-2
+# REQUIRED: Your SSH key pair name in AWS (without .pem extension)
+# Create one with: aws ec2 create-key-pair --key-name ca3-k3s --query 'KeyMaterial' --output text > ~/.ssh/ca3-k3s.pem && chmod 400 ~/.ssh/ca3-k3s.pem
+ssh_key_name = "your-key-name"
 
-# For other regions, update AMI ID:
+# REQUIRED: Your public IP address for SSH access
+# Get your IP: curl ifconfig.me
+# IMPORTANT: Must be in CIDR notation with /32 suffix
+my_ip = "1.2.3.4/32"
+
+# Optional overrides (defaults are set in variables.tf)
+# aws_region = "us-east-2"
+# instance_type = "t3.medium"
+# node_count = 3
+# project_name = "CA3-K3s-3Node"
+# ebs_volume_size = 20
+
+# Note: AMI ID is automatically selected for us-east-2
+# For other regions, update ami_id in variables.tf:
 # us-east-1: ami-0557a15b87f6559cf
 # us-west-2: ami-0aff18ec83b712f05
 # Find more at: https://cloud-images.ubuntu.com/locator/ec2/
