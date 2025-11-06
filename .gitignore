@@ -20,3 +20,6 @@ terraform/terraform.tfvars.bak
 
 # Sensitive
 terraform/terraform.tfvars  # Contains your IP and potentially sensitive config
+
+# Planning documents (personal use, don't commit)
+.grade-improvement-plan.md
