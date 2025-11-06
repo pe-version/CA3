@@ -1,0 +1,425 @@
+{
+  "title": "CA3 Metals Processing - SLI Dashboard",
+  "tags": ["ca3", "metals", "sli", "golden-signals"],
+  "timezone": "browser",
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "type": "stat",
+      "title": "Producer Service Uptime",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"producer\"}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "mappings": [
+            { "options": { "1": { "text": "UP" } }, "type": "value" },
+            { "options": { "0": { "text": "DOWN" } }, "type": "value" }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
+      "type": "stat",
+      "title": "Processor Service Uptime",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"processor\"}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "mappings": [
+            { "options": { "1": { "text": "UP" } }, "type": "value" },
+            { "options": { "0": { "text": "DOWN" } }, "type": "value" }
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "type": "stat",
+      "title": "Kafka Connection Status",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "kafka_connection_status",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "mappings": [
+            { "options": { "1": { "text": "Connected" } }, "type": "value" },
+            { "options": { "0": { "text": "Disconnected" } }, "type": "value" }
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 6 },
+      "type": "timeseries",
+      "title": "Processing Duration - p95",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(processing_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "axisLabel": "Duration (seconds)"
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 6 },
+      "type": "timeseries",
+      "title": "Processing Duration - p99",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(processing_duration_seconds_bucket[5m]))",
+          "legendFormat": "p99",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "axisLabel": "Duration (seconds)"
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 6 },
+      "type": "timeseries",
+      "title": "Average Processing Time",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(processing_duration_seconds_sum[5m]) / rate(processing_duration_seconds_count[5m])",
+          "legendFormat": "avg",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "axisLabel": "Duration (seconds)"
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 14 },
+      "type": "timeseries",
+      "title": "Message Production Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(producer_messages_total[1m])",
+          "legendFormat": "{{metal}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "axisLabel": "Messages/sec"
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 14 },
+      "type": "timeseries",
+      "title": "Message Processing Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(processor_messages_total[1m])",
+          "legendFormat": "{{metal}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "axisLabel": "Messages/sec"
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 14 },
+      "type": "timeseries",
+      "title": "MongoDB Insert Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(mongodb_inserts_total[1m])",
+          "legendFormat": "{{metal}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "axisLabel": "Inserts/sec"
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 22 },
+      "type": "timeseries",
+      "title": "Producer Error Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(producer_errors_total[5m])",
+          "legendFormat": "errors/sec",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "axisLabel": "Errors/sec"
+          },
+          "color": {
+            "mode": "palette-classic",
+            "seriesBy": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": 11,
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 22 },
+      "type": "timeseries",
+      "title": "Processor Error Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(processor_errors_total[5m])",
+          "legendFormat": "errors/sec",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "axisLabel": "Errors/sec"
+          },
+          "color": {
+            "mode": "palette-classic",
+            "seriesBy": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": 12,
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 22 },
+      "type": "stat",
+      "title": "Total Errors (All Time)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(producer_errors_total) + sum(processor_errors_total)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background"
+      }
+    },
+    {
+      "id": 13,
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 30 },
+      "type": "stat",
+      "title": "Total Messages Produced",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(producer_messages_total)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 30 },
+      "type": "stat",
+      "title": "Total Messages Processed",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(processor_messages_total)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "type": "timeseries",
+      "title": "Message Processing Lag",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(producer_messages_total) - sum(processor_messages_total)",
+          "legendFormat": "lag",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "axisLabel": "Messages"
+          }
+        }
+      }
+    },
+    {
+      "id": 16,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "type": "stat",
+      "title": "MongoDB Connection Status",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "mongodb_connection_status",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "mappings": [
+            { "options": { "1": { "text": "Connected" } }, "type": "value" },
+            { "options": { "0": { "text": "Disconnected" } }, "type": "value" }
+          ]
+        }
+      }
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

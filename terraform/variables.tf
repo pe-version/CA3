@@ -10,10 +10,22 @@ variable "ami_id" {
   default     = "ami-0ea3c35c5c3284d82" # Ubuntu 22.04 LTS in us-east-2
 }
 
-variable "instance_type" {
-  description = "EC2 instance type for all nodes"
+variable "master_instance_type" {
+  description = "EC2 instance type for master node"
   type        = string
-  default     = "t3.medium"  # CA3: 3-node cluster - addresses CA2 capacity issues
+  default     = "t3.small"  # Control plane + observability
+}
+
+variable "worker_1_instance_type" {
+  description = "EC2 instance type for worker-1 (data services: Kafka, Zookeeper, MongoDB)"
+  type        = string
+  default     = "t3.medium"  # Needs more RAM for Kafka
+}
+
+variable "worker_2_instance_type" {
+  description = "EC2 instance type for worker-2 (application services: Producer, Processor)"
+  type        = string
+  default     = "t3.small"  # Lightweight applications
 }
 
 variable "node_count" {
