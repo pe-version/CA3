@@ -90,7 +90,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
       containers:
         - name: processor
-          image: hiphophippo/metals-processor:v1.0
+          image: hiphophippo/metals-processor:v1.1
           ports:
             - containerPort: 8001
               name: http

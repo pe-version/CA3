@@ -90,7 +90,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
       containers:
         - name: producer
-          image: hiphophippo/metals-producer:v1.0
+          image: hiphophippo/metals-producer:v1.1
           ports:
             - containerPort: 8000
               name: http

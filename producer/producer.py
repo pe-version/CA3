@@ -9,8 +9,9 @@ import logging
 from datetime import datetime
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
-from flask import Flask, jsonify
+from flask import Flask, jsonify, Response
 import threading
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 logging.basicConfig(
     level=os.getenv('LOG_LEVEL', 'INFO'),
@@ -19,6 +20,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Prometheus metrics
+producer_messages_total = Counter('producer_messages_total', 'Total messages produced', ['metal', 'topic'])
+producer_errors_total = Counter('producer_errors_total', 'Total production errors')
+kafka_connection_status = Gauge('kafka_connection_status', 'Kafka connection status (1=connected, 0=disconnected)')
 
 producer = None
 kafka_connected = False
@@ -78,11 +84,13 @@ def init_kafka_producer():
             )
             producer.flush(timeout=10)
             kafka_connected = True
+            kafka_connection_status.set(1)
             logger.info("Connected to Kafka")
             return True
         except Exception as e:
             logger.error(f"Kafka connection failed: {e}")
             kafka_connected = False
+            kafka_connection_status.set(0)
             if attempt < max_retries - 1:
                 time.sleep(5)
     return False
@@ -101,15 +109,18 @@ def produce_messages():
             future = producer.send(KAFKA_TOPIC, key=event['metal'], value=event)
             record_metadata = future.get(timeout=10)
             messages_sent += 1
+            producer_messages_total.labels(metal=event['metal'], topic=KAFKA_TOPIC).inc()
             last_sent = datetime.utcnow().isoformat()
             logger.info(f"Sent: {event['metal']} @ ${event['price']} (msg #{messages_sent})")
             last_error = None
             time.sleep(PRODUCER_INTERVAL)
         except Exception as e:
             error_count += 1
+            producer_errors_total.inc()
             last_error = str(e)
             logger.error(f"Error: {e}")
             kafka_connected = False
+            kafka_connection_status.set(0)
             time.sleep(5)
 
 @app.route('/health', methods=['GET'])
@@ -147,6 +158,10 @@ def stats():
         'kafka_connected': kafka_connected,
         'topic': KAFKA_TOPIC
     }), 200
+
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
 
 def start_flask():
     app.run(host='0.0.0.0', port=8000, debug=False, use_reloader=False)

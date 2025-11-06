@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ca3-app
+
+resources:
+  - 00-namespace.yaml
+  - 02-configmaps.yaml
+  - 03-secret-store.yaml
+  - 04-external-secrets.yaml
+  - 05-storage-class.yaml
+  - 10-zookeeper.yaml
+  - 11-kafka.yaml
+  - 12-mongodb.yaml
+  - 20-processor.yaml
+  - 21-producer.yaml
+  - 22-servicemonitors.yaml

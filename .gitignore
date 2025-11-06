@@ -1,3 +1,22 @@
+# Terraform
 terraform/.terraform/
 **/.terraform/
 .terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/tfplan
+terraform/*.tfplan
+terraform/terraform.tfvars.bak
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Backup files
+*.bak
+*.backup
+
+# Sensitive
+terraform/terraform.tfvars  # Contains your IP and potentially sensitive config

@@ -10,8 +10,9 @@ from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
-from flask import Flask, jsonify
+from flask import Flask, jsonify, Response
 import threading
+from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 logging.basicConfig(
     level=os.getenv('LOG_LEVEL', 'INFO'),
@@ -20,6 +21,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Prometheus metrics
+processor_messages_total = Counter('processor_messages_total', 'Total messages processed', ['metal'])
+processor_errors_total = Counter('processor_errors_total', 'Total processing errors')
+mongodb_inserts_total = Counter('mongodb_inserts_total', 'Total MongoDB inserts', ['metal'])
+kafka_consumer_lag = Gauge('kafka_consumer_lag', 'Kafka consumer lag', ['partition'])
+mongodb_connection_status = Gauge('mongodb_connection_status', 'MongoDB connection status (1=connected, 0=disconnected)')
+kafka_connection_status = Gauge('kafka_connection_status', 'Kafka connection status (1=connected, 0=disconnected)')
+processing_duration_seconds = Histogram('processing_duration_seconds', 'Time spent processing messages')
 
 consumer = None
 mongo_client = None
@@ -70,11 +80,13 @@ def init_mongodb():
             collection.create_index('metal')
             collection.create_index('timestamp')
             mongodb_connected = True
+            mongodb_connection_status.set(1)
             logger.info("Connected to MongoDB")
             return True
         except Exception as e:
             logger.error(f"MongoDB connection failed: {e}")
             mongodb_connected = False
+            mongodb_connection_status.set(0)
             if attempt < max_retries - 1:
                 time.sleep(5)
     return False
@@ -100,11 +112,13 @@ def init_kafka_consumer():
                 logger.warning(f"Topic '{KAFKA_TOPIC}' doesn't exist yet, will be created automatically")
                 partitions = set()
             kafka_connected = True
+            kafka_connection_status.set(1)
             logger.info(f"Connected to Kafka. Topic has {len(partitions) if partitions else 0} partitions")
             return True
         except Exception as e:
             logger.error(f"Kafka connection failed: {e}")
             kafka_connected = False
+            kafka_connection_status.set(0)
             if attempt < max_retries - 1:
                 time.sleep(5)
     return False
@@ -112,6 +126,7 @@ def init_kafka_consumer():
 def process_message(message):
     global processed_count, error_count, last_processed, last_error
     try:
+        start_time = time.time()
         document = {
             **message,
             'processed_at': datetime.utcnow(),
@@ -123,12 +138,17 @@ def process_message(message):
             upsert=True
         )
         processed_count += 1
+        processor_messages_total.labels(metal=message['metal']).inc()
+        if result.upserted_id:
+            mongodb_inserts_total.labels(metal=message['metal']).inc()
+        processing_duration_seconds.observe(time.time() - start_time)
         last_processed = message['event_id']
         if result.upserted_id:
             logger.info(f"Processed: {message['metal']} @ ${message['price']}")
         return True
     except Exception as e:
         error_count += 1
+        processor_errors_total.inc()
         last_error = str(e)
         logger.error(f"Processing error: {e}")
         return False
@@ -215,6 +235,10 @@ def stats():
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
 
 def start_flask():
     app.run(host='0.0.0.0', port=8001, debug=False, use_reloader=False)

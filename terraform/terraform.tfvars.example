@@ -12,10 +12,20 @@ my_ip = "1.2.3.4/32"
 
 # Optional overrides (defaults are set in variables.tf)
 # aws_region = "us-east-2"
-# instance_type = "t3.medium"
 # node_count = 3
 # project_name = "CA3-K3s-3Node"
 # ebs_volume_size = 20
+
+# Instance types (defaults: balanced config)
+# master_instance_type = "t3.small"    # Control plane + observability (~$0.50/day)
+# worker_1_instance_type = "t3.medium" # Data services (Kafka needs RAM) (~$1/day)
+# worker_2_instance_type = "t3.small"  # App services (lightweight) (~$0.50/day)
+# Total: ~$2/day or ~$60/month
+
+# Budget alternatives:
+# Option 1 - All small (TIGHT, may OOM on Kafka): all t3.small = ~$1.50/day
+# Option 2 - Balanced (RECOMMENDED): t3.small, t3.medium, t3.small = ~$2/day
+# Option 3 - All medium (COMFORTABLE): all t3.medium = ~$3/day
 
 # Note: AMI ID is automatically selected for us-east-2
 # For other regions, update ami_id in variables.tf:

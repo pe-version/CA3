@@ -22,7 +22,7 @@ fi
 MASTER_IP=$(terraform -chdir=terraform output -raw master_public_ip)
 WORKER1_IP=$(terraform -chdir=terraform output -raw worker_1_public_ip)
 WORKER2_IP=$(terraform -chdir=terraform output -raw worker_2_public_ip)
-SSH_KEY="${HOME}/.ssh/$(terraform -chdir=terraform output -json ssh_commands | jq -r '.master' | grep -oP '(?<=-i )[^ ]+' | sed 's|~|'${HOME}'|')"
+SSH_KEY="${HOME}/.ssh/ca0-keys.pem"  # Using known SSH key name from terraform.tfvars
 
 echo -e "${YELLOW}Master IP:${NC} $MASTER_IP"
 echo -e "${YELLOW}Worker 1 IP:${NC} $WORKER1_IP"

@@ -33,8 +33,7 @@ curl -sfL https://get.k3s.io | sh -s - server \
   --node-name ${node_name} \
   --write-kubeconfig-mode 644 \
   --disable traefik \
-  --disable servicelb \
-  --kube-apiserver-arg=feature-gates=MixedProtocolLBService=true
+  --disable servicelb
 
 # Wait for K3s to be ready
 sleep 30
