@@ -16,7 +16,7 @@ This CA3 implementation deploys a production-grade Kubernetes cluster on AWS, tr
 - ✅ **Comprehensive Observability**: Prometheus + Grafana + Loki with custom SLI dashboards
 - ✅ **Production Infrastructure**: 3-node K3s cluster on AWS (2x t3.medium + 1x t3.small)
 - ✅ **Automated Scaling**: HPA configured for Producer and Processor services
-- ✅ **Security Hardening**: External Secrets Operator, NetworkPolicies ready
+- ✅ **Security Hardening**: External Secrets Operator, 9 NetworkPolicies deployed and active
 - ✅ **Cost-Optimized**: ~$50/month with strategic instance sizing
 
 ### CA2 → CA3 Evolution
@@ -28,6 +28,7 @@ This CA3 implementation deploys a production-grade Kubernetes cluster on AWS, tr
 | **Observability** | None | Prometheus + Grafana + Loki | Production-ready |
 | **Metrics** | None | 16-panel SLI dashboard | Golden Signals |
 | **Autoscaling** | Manual only | HPA with CPU/memory triggers | Automated |
+| **Security** | Docker Secrets + Overlay networks | External Secrets Operator + 9 NetworkPolicies | Enterprise-grade |
 | **Cost** | $45/month (failed) | $50/month (working) | $5/month premium |
 | **Grade Impact** | Lost 7/10 on Scaling | Expected full credit | Addressed feedback |
 
@@ -560,6 +561,146 @@ watch -n 2 'kubectl get hpa -n ca3-app'
 
 ---
 
+## Security Hardening
+
+### Network Isolation with NetworkPolicies
+
+**Implementation**: Comprehensive defense-in-depth network security using Kubernetes NetworkPolicies.
+
+**Location**: [k8s/security/network-policies.yaml](k8s/security/network-policies.yaml) (300 lines, 9 policies)
+
+#### Deployed Policies
+
+1. **Default Deny Ingress** - Blocks all incoming traffic by default
+2. **Allow Prometheus Scraping** - Permits metrics collection from all pods
+3. **Allow Promtail** - Enables log collection
+4. **ZooKeeper Policy** - Only Kafka can connect to ZooKeeper (port 2181)
+5. **Kafka Policy** - Only Producer and Processor can connect (port 9092)
+6. **MongoDB Policy** - Only Processor can connect (port 27017)
+7. **Producer Policy** - Can connect to Kafka + external APIs
+8. **Processor Policy** - Can connect to Kafka and MongoDB only
+9. **Grafana Policy** - Can access Prometheus and Loki
+
+#### Network Segmentation Rules
+
+**Data Flow Restrictions**:
+```
+Producer  ──→ Kafka (port 9092) ✅
+Producer  ──X MongoDB (blocked) ⛔
+Processor ──→ Kafka (port 9092) ✅
+Processor ──→ MongoDB (port 27017) ✅
+Kafka     ──→ ZooKeeper (port 2181) ✅
+ZooKeeper ──X MongoDB (blocked) ⛔
+```
+
+**Example: Processor NetworkPolicy** ([processor-policy](k8s/security/network-policies.yaml#L211-L254)):
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: processor-policy
+  namespace: ca3-app
+spec:
+  podSelector:
+    matchLabels:
+      app: processor
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8001  # Metrics endpoint
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - protocol: TCP
+          port: 27017
+    - to:  # DNS
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+```
+
+#### Verification & Evidence
+
+**Deployment Status**:
+```bash
+kubectl get networkpolicy -n ca3-app
+```
+
+**Output** (see [evidence/implement-network-policies.jpg](evidence/implement-network-policies.jpg)):
+```
+NAME                         POD-SELECTOR        AGE
+default-deny-ingress         <none>              2d
+allow-prometheus-scraping    <none>              2d
+allow-promtail              <none>              2d
+zookeeper-policy            app=zookeeper       2d
+kafka-policy                app=kafka           2d
+mongodb-policy              app=mongodb         2d
+producer-policy             app=producer        2d
+processor-policy            app=processor       2d
+grafana-policy              app.kubernetes.io/name=grafana  2d
+```
+
+**Processor Policy Details** (see [evidence/processor-security-policy-sample.jpg](evidence/processor-security-policy-sample.jpg)):
+```bash
+kubectl describe networkpolicy processor-policy -n ca3-app
+```
+
+Shows active policy enforcement:
+- **Ingress**: Port 8001/TCP allowed (metrics endpoint)
+- **Egress to Kafka**: Port 9092/TCP, podSelector: app=kafka ✅
+- **Egress to MongoDB**: Port 27017/TCP, podSelector: app=mongodb ✅
+- **Egress to DNS**: Port 53/UDP for name resolution ✅
+
+### Secrets Management
+
+**External Secrets Operator** with AWS Secrets Manager integration:
+
+**Configuration**:
+- [03-secret-store.yaml](k8s/base/03-secret-store.yaml) - AWS Secrets Manager connection
+- [04-external-secrets.yaml](k8s/base/04-external-secrets.yaml) - Syncs mongodb-password and api-key
+
+**Secrets Synced**:
+```bash
+kubectl get externalsecret -n ca3-app
+```
+
+1. **mongodb-password** - Synced from `ca3-mongodb-password` in AWS Secrets Manager
+2. **api-key** - Synced from `ca3-metals-api-key` in AWS Secrets Manager
+
+**Security Benefits**:
+- ✅ No hardcoded credentials in manifests
+- ✅ Centralized secret rotation in AWS
+- ✅ Automatic K8s Secret creation via operator
+- ✅ Audit trail in AWS CloudTrail
+
+### TLS Configuration
+
+**Current Status**: TLS-ready infrastructure
+
+**Future Implementation**:
+- Kafka TLS with cert-manager
+- MongoDB TLS connections
+- Ingress TLS termination with Let's Encrypt
+
+---
+
 ## Cost Breakdown & Justification
 
 ### Monthly Infrastructure Cost
@@ -837,7 +978,7 @@ prometheus:
 
 - [x] **Security (15%)**:
   - External Secrets Operator (AWS Secrets Manager) ✅
-  - NetworkPolicies ready (can be added)
+  - NetworkPolicies deployed and active ✅
   - TLS-ready configuration
 
 - [x] **Documentation (10%)**:
@@ -847,14 +988,36 @@ prometheus:
   - Cost analysis ✅
   - Troubleshooting guide ✅
 
-### Screenshots to Include
+### Screenshots Included
 
-1. **Grafana Dashboard**: metals-sli-dashboard showing all 16 panels with live data
-2. **Prometheus Targets**: Status → Targets showing producer/processor UP (1/1)
-3. **Loki Logs**: Explore with `{namespace="ca3-app"}` query results
-4. **kubectl get nodes**: Showing all 3 nodes Ready with instance types
-5. **kubectl get pods**: All 17 pods in ca3-app namespace Running (1/1)
-6. **AWS EC2 Console**: Showing 3 instances running (optional but recommended)
+#### Observability Evidence
+1. **Grafana Dashboard** - 8 screenshots showing metals-sli-dashboard with all 16 panels and live data
+   - [grafana-dashboard-1.jpg](evidence/grafana-dashboard-1.jpg) through [grafana-dashboard-8.jpg](evidence/grafana-dashboard-8.jpg)
+   - Displays: Service uptime, connection status, latency metrics, throughput, error rates
+
+2. **Prometheus Targets** - Status → Targets showing producer/processor UP (1/1)
+   - [prometheus-example.jpg](evidence/prometheus-example.jpg)
+
+3. **Loki Logs** - Explore with `{namespace="ca3-app"}` query showing centralized logging
+   - [loki-log.jpg](evidence/loki-log.jpg)
+
+#### Infrastructure Evidence
+4. **kubectl get nodes** - All 3 nodes Ready with instance types
+   - [kubectl get nodes.jpg](evidence/kubectl%20get%20nodes.jpg)
+
+5. **kubectl get pods** - All 17 pods in ca3-app namespace Running (1/1)
+   - [kubectl get pods.jpg](evidence/kubectl%20get%20pods.jpg)
+
+6. **AWS EC2 Console** - 3 instances running (2x t3.medium + 1x t3.small)
+   - [aws-ec2-console-instance-view.jpg](evidence/aws-ec2-console-instance-view.jpg)
+
+#### Security Evidence
+7. **NetworkPolicies Deployed** - `kubectl get networkpolicy -n ca3-app` showing all 9 policies active
+   - [implement-network-policies.jpg](evidence/implement-network-policies.jpg)
+
+8. **NetworkPolicy Details** - `kubectl describe networkpolicy processor-policy` showing ingress/egress rules
+   - [processor-security-policy-sample.jpg](evidence/processor-security-policy-sample.jpg)
+   - Proves: Processor restricted to Kafka (9092) + MongoDB (27017) + DNS only
 
 ---
 
