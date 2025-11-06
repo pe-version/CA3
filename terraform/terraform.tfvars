@@ -9,4 +9,4 @@ worker_2_instance_type = "t3.small"    # Application services (Producer, Process
 
 # REQUIRED: Add your public IP for SSH access
 # Get it with: curl -s ifconfig.me
-my_ip = "2.59.157.101/32"
+my_ip = "2.59.157.106/32"
