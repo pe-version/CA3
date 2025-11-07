@@ -546,18 +546,48 @@ kubectl get pods -n ca3-app -l app=producer -w
 kubectl get hpa -n ca3-app
 ```
 
-### Load Testing
+### HPA Autoscaling Evidence
 
-```bash
-# Scale producer to max replicas
-kubectl patch hpa producer -n ca3-app -p '{"spec":{"minReplicas":3}}'
+**Demonstration Status**: HPA configured and actively monitoring workloads
 
-# Monitor metrics
-kubectl top pods -n ca3-app
-watch -n 2 'kubectl get hpa -n ca3-app'
+**Configuration Details**:
+- **Producer HPA**: min 1, max 3 replicas | CPU: 70%, Memory: 80%
+- **Processor HPA**: min 1, max 5 replicas | CPU: 70%, Memory: 80%
+- **Stabilization Windows**: 60s scale-up, 300s scale-down
+- **Scale-Up Policies**: 100% increase or 1 pod per 60s (max policy selected)
+- **Scale-Down Policies**: 50% decrease per 120s (min policy selected)
 
-# View increased throughput in Grafana dashboard
+**Observed Metrics** (see [evidence/hpa-configuration.txt](evidence/hpa-configuration.txt)):
 ```
+Producer:  CPU 79%/70%, Memory 22%/80% → Above scale-up threshold
+Processor: CPU 29%/70%, Memory 15%/80% → Normal operation
+```
+
+**HPA Status Observed**:
+- ✅ Metrics successfully collected from both deployments
+- ✅ HPA condition: "ScaleUpStabilized" - HPA actively evaluating recent metrics
+- ✅ Resource utilization tracked: CPU reached 79% (above 70% threshold)
+- ✅ Stabilization window functioning: HPA confirmed "recent recommendations were lower than current one, applying the lowest recent recommendation"
+
+**Load Testing**:
+Internal load generator created varying CPU load (60-93% utilization) demonstrating HPA's metric collection and threshold evaluation. HPA showed "AbleToScale: True" and "ScalingActive: True" confirming readiness to scale when sustained load exceeds thresholds.
+
+**Validation Commands**:
+```bash
+# View current HPA status
+kubectl get hpa -n ca3-app
+
+# Detailed HPA configuration and conditions
+kubectl describe hpa -n ca3-app
+
+# Real-time monitoring
+kubectl get hpa -n ca3-app -w
+```
+
+**Evidence Files**:
+- [hpa-baseline.txt](evidence/hpa-baseline.txt) - Initial state with 1 replica
+- [hpa-configuration.txt](evidence/hpa-configuration.txt) - Full HPA describe output showing policies and conditions
+- [hpa-under-load.txt](evidence/hpa-under-load.txt) - Metrics during load testing
 
 ---
 
