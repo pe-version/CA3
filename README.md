@@ -16,7 +16,7 @@ This CA3 implementation deploys a production-grade Kubernetes cluster on AWS, tr
 - ✅ **Comprehensive Observability**: Prometheus + Grafana + Loki with custom SLI dashboards
 - ✅ **Production Infrastructure**: 3-node K3s cluster on AWS (2x t3.medium + 1x t3.small)
 - ✅ **Automated Scaling**: HPA configured for Producer and Processor services
-- ✅ **Security Hardening**: External Secrets Operator, 9 NetworkPolicies, MongoDB TLS encryption
+- ✅ **Security Hardening**: External Secrets Operator, 9 NetworkPolicies, MongoDB + Kafka TLS encryption
 - ✅ **Cost-Optimized**: ~$50/month with strategic instance sizing
 
 ### CA2 → CA3 Evolution
@@ -28,7 +28,7 @@ This CA3 implementation deploys a production-grade Kubernetes cluster on AWS, tr
 | **Observability** | None | Prometheus + Grafana + Loki | Production-ready |
 | **Metrics** | None | 16-panel SLI dashboard | Golden Signals |
 | **Autoscaling** | Manual only | HPA with CPU/memory triggers | Automated |
-| **Security** | Docker Secrets + Overlay networks | External Secrets Operator + 9 NetworkPolicies + MongoDB TLS | Enterprise-grade |
+| **Security** | Docker Secrets + Overlay networks | External Secrets Operator + 9 NetworkPolicies + MongoDB/Kafka TLS | Enterprise-grade |
 | **Cost** | $45/month (failed) | $50/month (working) | $5/month premium |
 | **Grade Impact** | Lost 7/10 on Scaling | Expected full credit | Addressed feedback |
 
@@ -773,10 +773,49 @@ kubectl logs mongodb-0 -n ca3-app | grep -i tls
 - ✅ Protection against man-in-the-middle attacks
 - ✅ Migration-friendly configuration
 
-#### Kafka TLS
+#### Kafka TLS (Implemented)
 
-**Future Implementation**: Kafka TLS with SSL listener on port 9093
-- Ingress TLS termination with Let's Encrypt
+**Configuration**: Kafka configured with dual listeners for migration-friendly TLS deployment.
+
+**Certificate Authority**: Reused MongoDB-CA for unified certificate management
+
+**Kafka SSL Listeners** ([11-kafka.yaml](k8s/base/11-kafka.yaml)):
+```yaml
+KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,SSL://0.0.0.0:9093"
+KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-0:9092,SSL://kafka-0:9093"
+KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,SSL:SSL"
+KAFKA_SSL_CLIENT_AUTH: "none"  # Server-side TLS only
+```
+
+**JKS Keystore Generation**:
+- InitContainer: `eclipse-temurin:11-jre`
+- Converts PEM certificates to JKS format (required by Kafka/JVM)
+- Creates kafka.keystore.jks (2364 bytes) and kafka.truststore.jks (1222 bytes)
+- Stored in emptyDir volume, recreated on pod restart
+
+**Dual Listener Benefits**:
+- **Port 9092 (PLAINTEXT)**: Existing clients continue working
+- **Port 9093 (SSL)**: New secure connections available
+- **Migration Path**: Clients can migrate to SSL gradually
+- **Inter-broker**: Uses PLAINTEXT for performance (can switch to SSL later)
+
+**Verification**:
+```bash
+# Check Kafka SSL listeners
+kubectl logs kafka-0 -n ca3-app -c setup-keystore
+
+# Verify Kafka started successfully
+kubectl logs kafka-0 -n ca3-app | grep "KafkaServer id=1 started"
+```
+
+**Evidence Files**:
+- [kafka-tls-summary.txt](evidence/kafka-tls-summary.txt) - Complete implementation details
+
+**Security Benefits**:
+- ✅ SSL/TLS encryption available for messaging layer
+- ✅ Server authentication with certificates
+- ✅ Backward compatible with existing plaintext clients
+- ✅ Zero-downtime migration path
 
 ---
 

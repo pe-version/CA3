@@ -14,6 +14,9 @@ spec:
     - name: kafka
       port: 9092
       targetPort: 9092
+    - name: kafka-ssl
+      port: 9093
+      targetPort: 9093
   selector:
     app: kafka
 
@@ -59,21 +62,93 @@ spec:
                       values:
                         - zookeeper
                 topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: setup-keystore
+          image: eclipse-temurin:11-jre
+          command:
+            - sh
+            - -c
+            - |
+              # Create PKCS12 keystore
+              openssl pkcs12 -export \
+                -in /tmp/certs/kafka.crt \
+                -inkey /tmp/certs/kafka.key \
+                -out /tmp/keystores/kafka.p12 \
+                -name kafka \
+                -password pass:changeit
+
+              # Convert to JKS
+              keytool -importkeystore \
+                -srckeystore /tmp/keystores/kafka.p12 \
+                -srcstoretype PKCS12 \
+                -srcstorepass changeit \
+                -destkeystore /tmp/keystores/kafka.keystore.jks \
+                -deststoretype JKS \
+                -deststorepass changeit \
+                -noprompt
+
+              # Create truststore with CA
+              keytool -import \
+                -file /tmp/certs/ca.crt \
+                -alias ca \
+                -keystore /tmp/keystores/kafka.truststore.jks \
+                -storepass changeit \
+                -noprompt
+
+              # Create password files
+              echo "changeit" > /tmp/keystores/keystore-creds
+              echo "changeit" > /tmp/keystores/truststore-creds
+
+              ls -la /tmp/keystores/
+          volumeMounts:
+            - name: kafka-tls
+              mountPath: /tmp/certs
+              readOnly: true
+            - name: keystores
+              mountPath: /tmp/keystores
       containers:
         - name: kafka
           image: confluentinc/cp-kafka:7.0.0
           ports:
             - containerPort: 9092
               name: kafka
+            - containerPort: 9093
+              name: kafka-ssl
           env:
             - name: KAFKA_BROKER_ID
               value: "1"
             - name: KAFKA_ZOOKEEPER_CONNECT
               value: "zookeeper-0.zookeeper.ca3-app.svc.cluster.local:2181"
             - name: KAFKA_LISTENERS
-              value: "PLAINTEXT://0.0.0.0:9092"
+              value: "PLAINTEXT://0.0.0.0:9092,SSL://0.0.0.0:9093"
             - name: KAFKA_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://kafka-0.kafka.ca3-app.svc.cluster.local:9092"
+              value: "PLAINTEXT://kafka-0.kafka.ca3-app.svc.cluster.local:9092,SSL://kafka-0.kafka.ca3-app.svc.cluster.local:9093"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "PLAINTEXT:PLAINTEXT,SSL:SSL"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            - name: KAFKA_SSL_KEYSTORE_FILENAME
+              value: "kafka.keystore.jks"
+            - name: KAFKA_SSL_KEYSTORE_CREDENTIALS
+              value: "keystore-creds"
+            - name: KAFKA_SSL_KEY_CREDENTIALS
+              value: "keystore-creds"
+            - name: KAFKA_SSL_TRUSTSTORE_FILENAME
+              value: "kafka.truststore.jks"
+            - name: KAFKA_SSL_TRUSTSTORE_CREDENTIALS
+              value: "truststore-creds"
+            - name: KAFKA_SSL_KEYSTORE_LOCATION
+              value: "/etc/kafka/secrets/kafka.keystore.jks"
+            - name: KAFKA_SSL_KEYSTORE_PASSWORD
+              value: "changeit"
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: "changeit"
+            - name: KAFKA_SSL_TRUSTSTORE_LOCATION
+              value: "/etc/kafka/secrets/kafka.truststore.jks"
+            - name: KAFKA_SSL_TRUSTSTORE_PASSWORD
+              value: "changeit"
+            - name: KAFKA_SSL_CLIENT_AUTH
+              value: "none"
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
               value: "1"
             - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
@@ -107,6 +182,9 @@ spec:
           volumeMounts:
             - name: kafka-data
               mountPath: /var/lib/kafka/data
+            - name: keystores
+              mountPath: /etc/kafka/secrets
+              readOnly: true
           livenessProbe:
             tcpSocket:
               port: 9092
@@ -124,6 +202,12 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 5
+      volumes:
+        - name: kafka-tls
+          secret:
+            secretName: kafka-tls
+        - name: keystores
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: kafka-data
