@@ -1,0 +1,29 @@
+# MongoDB TLS Implementation Evidence
+
+## Configuration
+MongoDB TLS Mode: preferTLS
+- TLS is enabled and preferred
+- Certificate: /etc/mongodb/certs/mongodb.pem
+- CA Certificate: /etc/mongodb/certs/ca.crt
+- Mode allows both TLS and non-TLS connections (migration-friendly)
+
+## Certificate Details
+Subject: CN=mongodb-0.mongodb.ca3-app.svc.cluster.local, O=CA3-Project, C=US
+Issuer: CN=MongoDB-CA, O=CA3-Project, C=US
+Validity: 365 days
+SAN: mongodb-0.mongodb.ca3-app.svc.cluster.local, mongodb, localhost
+
+## TLS Connection Test
+{ ok: 1 }
+
+## MongoDB Logs Showing TLS
+{"t":{"$date":"2025-11-08T03:02:49.101+00:00"},"s":"I",  "c":"CONTROL",  "id":23285,   "ctx":"main","msg":"Automatically disabling TLS 1.0, to force-enable TLS 1.0 specify --sslDisabledProtocols 'none'"}
+{"t":{"$date":"2025-11-08T03:02:49.112+00:00"},"s":"I",  "c":"CONTROL",  "id":23403,   "ctx":"initandlisten","msg":"Build Info","attr":{"buildInfo":{"version":"7.0.25","gitVersion":"96dce3da49b8d2e9e0d328048cb56930eb1bdb2b","openSSLVersion":"OpenSSL 3.0.2 15 Mar 2022","modules":[],"allocator":"tcmalloc","environment":{"distmod":"ubuntu2204","distarch":"x86_64","target_arch":"x86_64"}}}}
+{"t":{"$date":"2025-11-08T03:02:49.112+00:00"},"s":"I",  "c":"CONTROL",  "id":21951,   "ctx":"initandlisten","msg":"Options set by command line","attr":{"options":{"net":{"bindIp":"*","tls":{"CAFile":"/etc/mongodb/certs/ca.crt","allowConnectionsWithoutCertificates":true,"certificateKeyFile":"/etc/mongodb/certs/mongodb.pem","mode":"preferTLS"}},"security":{"authorization":"enabled"}}}}
+{"t":{"$date":"2025-11-08T03:02:51.087+00:00"},"s":"I",  "c":"NETWORK",  "id":23016,   "ctx":"listener","msg":"Waiting for connections","attr":{"port":27017,"ssl":"on"}}
+{"t":{"$date":"2025-11-08T03:03:21.577+00:00"},"s":"I",  "c":"NETWORK",  "id":6723804, "ctx":"conn1","msg":"Ingress TLS handshake complete","attr":{"durationMillis":29}}
+{"t":{"$date":"2025-11-08T03:03:21.577+00:00"},"s":"W",  "c":"NETWORK",  "id":23234,   "ctx":"conn1","msg":"No SSL certificate provided by peer"}
+{"t":{"$date":"2025-11-08T03:03:21.995+00:00"},"s":"I",  "c":"NETWORK",  "id":6723804, "ctx":"conn2","msg":"Ingress TLS handshake complete","attr":{"durationMillis":4}}
+{"t":{"$date":"2025-11-08T03:03:21.996+00:00"},"s":"W",  "c":"NETWORK",  "id":23234,   "ctx":"conn2","msg":"No SSL certificate provided by peer"}
+{"t":{"$date":"2025-11-08T03:03:21.998+00:00"},"s":"I",  "c":"NETWORK",  "id":6723804, "ctx":"conn3","msg":"Ingress TLS handshake complete","attr":{"durationMillis":7}}
+{"t":{"$date":"2025-11-08T03:03:21.998+00:00"},"s":"W",  "c":"NETWORK",  "id":23234,   "ctx":"conn3","msg":"No SSL certificate provided by peer"}

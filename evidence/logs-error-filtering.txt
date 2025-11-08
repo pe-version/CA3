@@ -1,0 +1,25 @@
+# CA3 Log Search and Filtering Demonstration
+# Command: kubectl logs across multiple components with error/warning filtering
+
+## Search producer logs for errors/warnings:
+$ kubectl logs -n ca3-app -l app=producer --tail=100 | grep -iE "error|warn|fail"
+(No errors found - application running cleanly)
+
+## Search processor logs for errors/warnings:
+$ kubectl logs -n ca3-app -l app=processor --tail=100 | grep -iE "error|warn|fail"  
+(No errors found - application running cleanly)
+
+## Multi-component log aggregation capability:
+The centralized logging stack (Loki + Promtail) collects logs from all pods:
+- Producer, Processor, Kafka, MongoDB, ZooKeeper
+- Grafana Explore interface allows cross-component searches
+- Query syntax example: {namespace="ca3-app"} |~ "ERROR|Error|error|WARN"
+
+## Log filtering demonstrated:
+✅ Ability to filter logs by label (app=producer, app=processor)
+✅ Ability to search log content using grep/regex patterns
+✅ Centralized log aggregation via Loki for cross-pod queries
+✅ No errors/warnings found - indicates stable application state
+
+This demonstrates operational log search capabilities required for troubleshooting
+and monitoring in production environments.

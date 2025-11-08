@@ -1,0 +1,2 @@
+MongoServerError: Command serverStatus requires authentication
+command terminated with exit code 1

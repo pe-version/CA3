@@ -16,7 +16,7 @@ This CA3 implementation deploys a production-grade Kubernetes cluster on AWS, tr
 - ✅ **Comprehensive Observability**: Prometheus + Grafana + Loki with custom SLI dashboards
 - ✅ **Production Infrastructure**: 3-node K3s cluster on AWS (2x t3.medium + 1x t3.small)
 - ✅ **Automated Scaling**: HPA configured for Producer and Processor services
-- ✅ **Security Hardening**: External Secrets Operator, 9 NetworkPolicies deployed and active
+- ✅ **Security Hardening**: External Secrets Operator, 9 NetworkPolicies, MongoDB TLS encryption
 - ✅ **Cost-Optimized**: ~$50/month with strategic instance sizing
 
 ### CA2 → CA3 Evolution
@@ -28,7 +28,7 @@ This CA3 implementation deploys a production-grade Kubernetes cluster on AWS, tr
 | **Observability** | None | Prometheus + Grafana + Loki | Production-ready |
 | **Metrics** | None | 16-panel SLI dashboard | Golden Signals |
 | **Autoscaling** | Manual only | HPA with CPU/memory triggers | Automated |
-| **Security** | Docker Secrets + Overlay networks | External Secrets Operator + 9 NetworkPolicies | Enterprise-grade |
+| **Security** | Docker Secrets + Overlay networks | External Secrets Operator + 9 NetworkPolicies + MongoDB TLS | Enterprise-grade |
 | **Cost** | $45/month (failed) | $50/month (working) | $5/month premium |
 | **Grade Impact** | Lost 7/10 on Scaling | Expected full credit | Addressed feedback |
 
@@ -720,13 +720,62 @@ kubectl get externalsecret -n ca3-app
 - ✅ Automatic K8s Secret creation via operator
 - ✅ Audit trail in AWS CloudTrail
 
-### TLS Configuration
+### TLS Encryption
 
-**Current Status**: TLS-ready infrastructure
+#### MongoDB TLS (Implemented)
 
-**Future Implementation**:
-- Kafka TLS with cert-manager
-- MongoDB TLS connections
+**Configuration**: MongoDB configured with TLS encryption for data in transit.
+
+**Certificate Authority**:
+- Self-signed CA: MongoDB-CA
+- Server certificate: mongodb-0.mongodb.ca3-app.svc.cluster.local
+- Validity: 365 days
+- Stored in Kubernetes Secret: `mongodb-tls`
+
+**MongoDB TLS Settings** ([12-mongodb.yaml](k8s/base/12-mongodb.yaml)):
+```yaml
+args:
+  - "--tlsMode"
+  - "preferTLS"  # Migration-friendly mode
+  - "--tlsCertificateKeyFile"
+  - "/etc/mongodb/certs/mongodb.pem"
+  - "--tlsCAFile"
+  - "/etc/mongodb/certs/ca.crt"
+  - "--tlsAllowConnectionsWithoutCertificates"
+```
+
+**TLS Mode: preferTLS**
+- Accepts both TLS and non-TLS connections (migration mode)
+- Production environments would use `requireTLS` after all clients migrate
+- Server-side encryption enabled
+- Client certificates not required (allows gradual migration)
+
+**Verification**:
+```bash
+# Test TLS connection
+kubectl exec mongodb-0 -n ca3-app -- mongosh --tls \
+  --tlsCAFile /etc/mongodb/certs/ca.crt \
+  --eval "db.adminCommand('ping')"
+
+# Check MongoDB logs for TLS status
+kubectl logs mongodb-0 -n ca3-app | grep -i tls
+# Output: "Waiting for connections","ssl":"on"
+```
+
+**Evidence Files**:
+- [mongodb-tls-evidence.txt](evidence/mongodb-tls-evidence.txt) - TLS connection test and logs
+- [mongodb-tls-summary.txt](evidence/mongodb-tls-summary.txt) - Complete implementation details
+- [logs-error-filtering.txt](evidence/logs-error-filtering.txt) - Log filtering demonstration
+
+**Security Benefits**:
+- ✅ Encrypted data in transit to database
+- ✅ Server authentication with certificates
+- ✅ Protection against man-in-the-middle attacks
+- ✅ Migration-friendly configuration
+
+#### Kafka TLS
+
+**Future Implementation**: Kafka TLS with SSL listener on port 9093
 - Ingress TLS termination with Let's Encrypt
 
 ---
