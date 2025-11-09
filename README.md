@@ -548,6 +548,8 @@ kubectl get hpa -n ca3-app
 
 ### Resilience Video Demonstration
 
+**Video**: [Watch Resilience Demonstration on YouTube](https://youtu.be/OIHBLhRCOn8) (Unlisted)
+
 **Video Evidence**: Full resilience demonstration recorded showing system behavior during failures.
 
 **What the Video Demonstrates**:
