@@ -546,6 +546,43 @@ kubectl get pods -n ca3-app -l app=producer -w
 kubectl get hpa -n ca3-app
 ```
 
+### Resilience Video Demonstration
+
+**Video Evidence**: Full resilience demonstration recorded showing system behavior during failures.
+
+**What the Video Demonstrates**:
+1. **Pod Auto-Recovery**: Deleting processor pod → Kubernetes automatically recreates → New pod reaches Running state
+2. **StatefulSet Data Persistence**: Deleting MongoDB pod → Pod restarts → All data preserved via PersistentVolume
+3. **High Availability**: System continues processing data during component failures (document count increases despite processor deletion)
+4. **HPA Configuration**: Horizontal Pod Autoscalers monitoring both producer and processor with configured thresholds
+
+**Key Observations**:
+- Deployment controller maintains desired replica count automatically
+- StatefulSet PVCs preserve data through pod restarts (53K+ documents retained)
+- Producer continues generating data while processor recovers
+- Kafka acts as message buffer during temporary failures
+- System demonstrates self-healing and resilience to component failures
+
+**Testing Script**: [resilience-test-script.sh](resilience-test-script.sh) - Automated pre-flight testing script used to validate resilience features before recording.
+
+**Video Validation Commands**:
+```bash
+# System health check
+kubectl get nodes
+kubectl get pods -n ca3-app
+kubectl get hpa -n ca3-app
+
+# Pod auto-recovery test
+kubectl delete pod -n ca3-app -l app=processor
+kubectl get pods -n ca3-app -w | grep processor
+
+# StatefulSet persistence test
+kubectl exec -n ca3-app mongodb-0 -- mongosh --tls --tlsCAFile /etc/mongodb/certs/ca.crt [count documents]
+kubectl delete pod mongodb-0 -n ca3-app
+kubectl wait --for=condition=ready pod/mongodb-0 -n ca3-app --timeout=120s
+kubectl exec -n ca3-app mongodb-0 -- mongosh --tls --tlsCAFile /etc/mongodb/certs/ca.crt [verify data]
+```
+
 ### HPA Autoscaling Evidence
 
 **Demonstration Status**: HPA configured and actively monitoring workloads
