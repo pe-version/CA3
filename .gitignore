@@ -28,6 +28,7 @@ terraform/terraform.tfvars  # Contains your IP and potentially sensitive config
 
 # Video files (too large for GitHub, submit separately)
 evidence/*.mov
-evidence/*.mp4
+evidence/resilience-test-video.mp4
 *.mov
-*.mp4
+# Allow compressed backup video
+!evidence/resilience-test-video-compressed.mp4
